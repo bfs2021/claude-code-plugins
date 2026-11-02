@@ -2622,6 +2622,14 @@ expect "attended, dispatched: git reset --hard asks too" 0 --via dispatched \
 assert_eq "attended, dispatched: the merged decision is ask" ask \
   "$(jq -r '.hookSpecificOutput.permissionDecision // empty' <<<"$GUARD_OUT")"
 
+# --- a `(` that continues a word hides no command (#12360) ---------------------
+# Bash keeps `a=(x)` and `@(x)` inside the word, so the `#` after the `)` is
+# literal and the `;` still starts a command. Reading the `)` as a control
+# operator started a comment and hid the command behind it.
+run "a=(x)#; git reset --hard (blocked, word-continuing paren)" 'a=(x)#; git reset --hard' 2
+run "@(x)#; git reset --hard (blocked, extglob form)" '@(x)#; git reset --hard' 2
+run "a=(x)#; git status (allowed, the later command is still read)" 'a=(x)#; git status' 0
+
 # --- Guards stay on in auto mode -----------------------------------------------
 AUTO_PAYLOAD=$(MSYS_NO_PATHCONV=1 jq -n --arg d "$REPO_SHA1" \
   '{tool_name:"Bash",tool_input:{command:"git reset --hard"},cwd:$d,permission_mode:"auto"}')

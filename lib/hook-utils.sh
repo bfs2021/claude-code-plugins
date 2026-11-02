@@ -4612,6 +4612,9 @@ hook::bash_parse_segments_uncached() {
   # `pend` is set while a redirection is waiting for its operand word: the next
   # word to close becomes that target instead of an argv word.
   local word="" have=0 pend=0 rop_txt="" rfd_next="" rdup=""
+  # Depth of `(` that continued the word being assembled (`a=(…)`, `@(…)`).
+  # Bash keeps such a group inside the word; its `)` does not end a command.
+  local wparen=0
   # Quoting provenance of the word being assembled — whether a quoted span fed
   # it, whether any character reached it unquoted, whether a backslash escape
   # did, and whether a span was still open at end of input. Reset with the word.
@@ -4845,7 +4848,7 @@ hook::bash_parse_segments_uncached() {
         [[ -n "$rdup" ]] || pend=1
       fi
       ;;
-    ';' | '&' | '|' | '(' | ')' | '`' | $'\n')
+    ';' | '&' | '|' | '`' | $'\n')
       ((have)) && hook::_bps_close_word
       hook::_bps_flush_segment
       # A command-line newline ends the line that introduced any pending
@@ -4877,6 +4880,28 @@ hook::bash_parse_segments_uncached() {
         hd_delims=()
         hd_strip=()
         hd_quoted=()
+      fi
+      ;;
+    '(')
+      # A `(` glued to a word continues it: an array assignment `a=(…)` or an
+      # extglob `@(…)`. Bash opens no subshell there, and the `)` that closes
+      # it leaves the word open, so a following `#` is literal, not a comment.
+      if ((have)); then
+        word+="("
+        wq_plain=1
+        ((wparen++))
+      else
+        hook::_bps_flush_segment
+      fi
+      ;;
+    ')')
+      if ((wparen > 0)); then
+        word+=")"
+        wq_plain=1
+        ((wparen--))
+      else
+        ((have)) && hook::_bps_close_word
+        hook::_bps_flush_segment
       fi
       ;;
     *)

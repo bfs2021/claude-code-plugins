@@ -3986,6 +3986,19 @@ else
   fail "bash_parse_segments mid-word # stays literal through reset: got [${bps_all[*]-}], want [echo x#y git reset --hard]"
 fi
 
+# A `(` glued to a word continues it (array assignment, extglob), so the `)`
+# that closes it does not end the segment and a following `#` is literal.
+for bps_wp_cmd in 'a=(x)#; git reset --hard' '@(x)#; git reset --hard'; do
+  bps_all=()
+  hook::bash_parse_segments "$bps_wp_cmd" bps_collect_all
+  bps_want="${bps_wp_cmd%%#*}# git reset --hard"
+  if [[ "${bps_all[*]-}" == "$bps_want" ]]; then
+    ok "bash_parse_segments: word-continuing ( keeps # literal ($bps_wp_cmd)"
+  else
+    fail "bash_parse_segments word-continuing ( ($bps_wp_cmd): got [${bps_all[*]-}], want [$bps_want]"
+  fi
+done
+
 # ANSI-C $'…' bodies decode in-process via ansi_c_decode_to (no $(printf) fork).
 bps_acd_cmd='git commit -m $'"'"'hello\nworld'"'"
 hook::bash_parse_segments "$bps_acd_cmd" bps_collect
